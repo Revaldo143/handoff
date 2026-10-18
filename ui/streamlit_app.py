@@ -751,7 +751,7 @@ with col_left:
         # Call backend
         with st.spinner("Gatekeeper evaluating enterprise database..."):
             res = api_post("/api/voice", {"text": user_input, "claimant": claimant_role})
-            if res and "claim" in res:
+            if res:
                 now_str = datetime.now().strftime("%H:%M IST")
                 st.session_state.chat_history.append({
                     "role": "user",
@@ -759,24 +759,46 @@ with col_left:
                     "text": user_input,
                     "timestamp": now_str
                 })
-                st.session_state.chat_history.append({
-                    "role": "agent",
-                    "state": res.get("gatekeeper_verdict"),
-                    "text": res.get("speech_reply"),
-                    "latency": res.get("latency_ms", 4.5),
-                    "timestamp": now_str
-                })
-                # Update trace
-                timeline = res["claim"].get("timeline", [])
-                st.session_state.latest_trace = [
-                    {
-                        "time": f"+{t.get('latency_offset_ms', 0)}ms",
-                        "step": t.get("step", "EVAL"),
-                        "state": t.get("state", "REPORTED"),
-                        "msg": t.get("detail", "")
-                    }
-                    for t in timeline
-                ]
+                # Multi-fragment utterances return {"claims": [...]}; single keeps {"claim": {...}}
+                items = res.get("claims")
+                if items:
+                    for it in items:
+                        st.session_state.chat_history.append({
+                            "role": "agent",
+                            "state": it.get("gatekeeper_verdict"),
+                            "text": it.get("speech_reply"),
+                            "latency": it.get("latency_ms", 0),
+                            "timestamp": now_str
+                        })
+                    merged_trace = []
+                    for it in items:
+                        for t in it.get("claim", {}).get("timeline", []):
+                            merged_trace.append({
+                                "time": f"+{t.get('latency_offset_ms', 0)}ms",
+                                "step": t.get("step", "EVAL"),
+                                "state": t.get("state", "REPORTED"),
+                                "msg": t.get("detail", "")
+                            })
+                    st.session_state.latest_trace = merged_trace
+                elif "claim" in res:
+                    st.session_state.chat_history.append({
+                        "role": "agent",
+                        "state": res.get("gatekeeper_verdict"),
+                        "text": res.get("speech_reply"),
+                        "latency": res.get("latency_ms", 4.5),
+                        "timestamp": now_str
+                    })
+                    # Update trace
+                    timeline = res["claim"].get("timeline", [])
+                    st.session_state.latest_trace = [
+                        {
+                            "time": f"+{t.get('latency_offset_ms', 0)}ms",
+                            "step": t.get("step", "EVAL"),
+                            "state": t.get("state", "REPORTED"),
+                            "msg": t.get("detail", "")
+                        }
+                        for t in timeline
+                    ]
                 st.rerun()
 
     # Reset Data button

@@ -62,7 +62,24 @@ def report_issue(text: str, claimant: str = "Alexa Voice Shift Assistant") -> st
     """
     payload = {"text": text, "claimant": claimant}
     result = _call_api("POST", "/api/voice", payload)
-    
+
+    # Multi-fragment utterances return {"claims": [...]}
+    if result.get("claims"):
+        return json.dumps({
+            "status": "success",
+            "count": result.get("count", len(result["claims"])),
+            "claims": [
+                {
+                    "claim_id": c.get("claim_id"),
+                    "gatekeeper_verdict": c.get("gatekeeper_verdict"),
+                    "speech_reply": c.get("speech_reply"),
+                    "latency_ms": c.get("latency_ms", 0),
+                }
+                for c in result["claims"]
+            ],
+            "latency_ms": f"{result.get('latency_ms', 0)} ms",
+        }, indent=2)
+
     verdict = result.get("gatekeeper_verdict", "UNKNOWN")
     speech = result.get("speech_reply", "")
     latency = result.get("latency_ms", 0.0)

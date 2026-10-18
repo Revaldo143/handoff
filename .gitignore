@@ -33,6 +33,7 @@ ENV/
 .venv/
 
 # Database files
+*.db
 *.db-journal
 *.db-wal
 *.db-shm

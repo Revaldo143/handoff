@@ -61,20 +61,15 @@ def read_root():
         "alexa_plus_compatible": True
     }
 
-@app.post("/api/voice")
-async def process_voice_claim(payload: VoiceRequest):
+def _process_fragment(fragment_text: str, claimant: str, conn, t_start: float):
     """
-    Main voice/text intake endpoint.
-    Processes the verbal claim, runs gatekeeper cross-verification against SQLite,
-    applies the state machine, records thinking trace with sub-millisecond timestamps,
-    and returns decision with total latency.
+    Process ONE utterance fragment into ONE claim: intent classification,
+    gatekeeper cross-verification against SQLite, state machine, thinking trace.
+    Returns the single-claim response dict (same shape /api/voice uses for one claim).
     """
-    t_start = time.perf_counter()
-    raw_text = payload.text.strip()
+    raw_text = fragment_text.strip()
     lowered = raw_text.lower()
-    claimant = payload.claimant or "Night Shift Operator"
 
-    conn = get_connection()
     cursor = conn.cursor()
     now_iso = datetime.now().isoformat()
 
@@ -91,7 +86,7 @@ async def process_voice_claim(payload: VoiceRequest):
         })
 
     log_trace("VOICE_INGESTION", "REPORTED", f"Incoming voice payload received: '{raw_text}'")
-    log_trace("ASR_AUDIO_PARSE", "REPORTED", f"Identified acoustic signature & dialect (Tanglish/English) from {claimant}")
+    log_trace("TEXT_PARSE", "REPORTED", f"Text input parsed (Tanglish/English) from {claimant}")
 
     # Determine intent & entities
     is_delivery_issue = any(k in lowered for k in [
@@ -286,7 +281,6 @@ async def process_voice_claim(payload: VoiceRequest):
     full_claim = dict(cursor.fetchone())
     cursor.execute("SELECT * FROM timeline WHERE claim_id = ? ORDER BY id ASC", (claim_id,))
     full_claim["timeline"] = [dict(t) for t in cursor.fetchall()]
-    conn.close()
 
     total_latency = round((time.perf_counter() - t_start) * 1000.0, 2)
 
@@ -298,6 +292,49 @@ async def process_voice_claim(payload: VoiceRequest):
         "claim": full_claim,
         "latency_ms": total_latency,
         "gatekeeper_verdict": full_claim["state"]
+    }
+
+
+@app.post("/api/voice")
+async def process_voice_claim(payload: VoiceRequest):
+    """
+    Main voice/text intake endpoint.
+    Splits multi-part utterances ("freezer delivery varala, cups almost empty")
+    into fragments; each fragment becomes its own claim with its own verdict.
+    Single-fragment input keeps the exact original single-claim response shape.
+    """
+    t_start = time.perf_counter()
+    claimant = payload.claimant or "Night Shift Operator"
+
+    fragments = [f.strip() for f in re.split(r"[,;]|\s\+\s", payload.text.strip()) if f.strip()]
+    seen, frags = set(), []
+    for f in fragments:
+        if f.lower() not in seen:
+            seen.add(f.lower())
+            frags.append(f)
+    if not frags:
+        raise HTTPException(status_code=400, detail="empty utterance")
+
+    conn = get_connection()
+    try:
+        results = [_process_fragment(f, claimant, conn, t_start) for f in frags]
+        conn.commit()
+    finally:
+        conn.close()
+
+    total_latency = round((time.perf_counter() - t_start) * 1000.0, 2)
+
+    if len(results) == 1:
+        results[0]["latency_ms"] = total_latency
+        return results[0]
+
+    return {
+        "status": "success",
+        "claims": results,
+        "count": len(results),
+        "latency_ms": total_latency,
+        "speech_reply": " ".join(r["speech_reply"] for r in results),
+        "gatekeeper_verdict": "MULTI",
     }
 
 @app.get("/api/claims")
