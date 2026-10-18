@@ -43,7 +43,7 @@ app.add_middleware(
 )
 
 class VoiceRequest(BaseModel):
-    text: str = Field(..., example="delivery varala, bread stock is missing")
+    text: str = Field(..., example="the delivery never arrived")
     claimant: Optional[str] = "Night Shift Operator"
     shift: Optional[str] = "Night Shift -> Morning Shift"
 
@@ -86,7 +86,7 @@ def _process_fragment(fragment_text: str, claimant: str, conn, t_start: float):
         })
 
     log_trace("VOICE_INGESTION", "REPORTED", f"Incoming voice payload received: '{raw_text}'")
-    log_trace("TEXT_PARSE", "REPORTED", f"Text input parsed (Tanglish/English) from {claimant}")
+    log_trace("TEXT_PARSE", "REPORTED", f"Text input parsed (English) from {claimant}")
 
     # Determine intent & entities
     is_delivery_issue = any(k in lowered for k in [
@@ -102,7 +102,7 @@ def _process_fragment(fragment_text: str, claimant: str, conn, t_start: float):
     response_decision = {}
 
     if is_delivery_issue and not ("cups" in lowered and "empty" in lowered and not "varala" in lowered):
-        # Scenario 1: Delivery Issue (e.g. "delivery varala")
+        # Scenario 1: Delivery Issue (e.g. "the delivery never arrived")
         log_trace("INTENT_EXTRACTION", "VERIFYING", "Intent classified as: MISSING_DELIVERY | Priority: HIGH")
         
         # Check if an item is specified or if general delivery is claimed
@@ -299,7 +299,7 @@ def _process_fragment(fragment_text: str, claimant: str, conn, t_start: float):
 async def process_voice_claim(payload: VoiceRequest):
     """
     Main voice/text intake endpoint.
-    Splits multi-part utterances ("freezer delivery varala, cups almost empty")
+    Splits multi-part utterances ("freezer delivery never arrived, cups are almost empty")
     into fragments; each fragment becomes its own claim with its own verdict.
     Single-fragment input keeps the exact original single-claim response shape.
     """

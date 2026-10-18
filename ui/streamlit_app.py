@@ -689,16 +689,16 @@ with col_left:
     
     preset_choice = None
     with p_col1:
-        if st.button("🛑 'delivery varala' (Will Refuse)", use_container_width=True):
-            preset_choice = "delivery varala, bread stock is missing"
+        if st.button("🛑 'delivery never arrived' (Will Refuse)", use_container_width=True):
+            preset_choice = "the delivery never arrived"
         if st.button("🛑 'milk not received' (No PO)", use_container_width=True):
             preset_choice = "milk delivery not received, vendor didn't show up"
             
     with p_col2:
-        if st.button("✅ 'cups empty' (Will Order)", use_container_width=True):
-            preset_choice = "cups empty, we need restock for morning chai rush"
-        if st.button("✅ 'wagh bakri tea low' (Will Order)", use_container_width=True):
-            preset_choice = "tea stock low, chai powder theerndhudhu"
+        if st.button("✅ 'cups are empty' (Will Order)", use_container_width=True):
+            preset_choice = "cups are empty"
+        if st.button("✅ 'tea stock low' (Will Order)", use_container_width=True):
+            preset_choice = "tea stock is running low"
 
     # Chat Bubbles Stream
     chat_html = ['<div class="chat-container">']
@@ -733,7 +733,7 @@ with col_left:
         user_input = st.text_input(
             "Shift Worker Voice Input",
             value=preset_choice if preset_choice else "",
-            placeholder="E.g., 'delivery varala, bread missing' or 'cups empty'...",
+            placeholder="E.g., 'the delivery never arrived' or 'cups are empty'...",
             label_visibility="collapsed"
         )
         f_col1, f_col2 = st.columns([3, 1])
