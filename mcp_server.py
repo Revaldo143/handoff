@@ -43,11 +43,23 @@ def _call_api(method: str, path: str, json_data: Optional[Dict[str, Any]] = None
     elif path == "/api/handoff/pending":
         return {"pending_claims": get_pending_handoff_claims()}
     elif path == "/api/voice" and json_data:
-        # Execute voice processing directly
+        # Execute voice processing directly (no API). asyncio.run() cannot be
+        # called from inside a running event loop (the MCP tool context), so
+        # run the coroutine on a dedicated thread with its own loop instead.
         import asyncio
+        import concurrent.futures
         from app.main import process_voice_claim, VoiceRequest
         req = VoiceRequest(text=json_data.get("text", ""), claimant="Alexa+ Voice Assistant")
-        return asyncio.run(process_voice_claim(req))
+        coro = process_voice_claim(req)
+        try:
+            asyncio.get_running_loop()
+            running = True
+        except RuntimeError:
+            running = False
+        if running:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+                return ex.submit(asyncio.run, coro).result()
+        return asyncio.run(coro)
 
     return {"error": "Could not connect to backend and fallback unhandled"}
 

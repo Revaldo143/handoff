@@ -191,6 +191,11 @@ def _process_fragment(fragment_text: str, claimant: str, conn, t_start: float):
         elif "bread" in lowered:
             target_sku = "BREAD-WHT"
             target_name = "Modern White Bread 400g"
+        else:
+            # No catalog SKU matched the utterance (e.g. "stock is low").
+            # Refuse gracefully instead of crashing on an unbound variable.
+            target_sku = None
+            target_name = "Unknown item"
 
         log_trace("ENTITY_EXTRACTION", "VERIFYING", f"Target identified: '{target_name}' (SKU: {target_sku})")
         log_trace("SQL_STOCK_QUERY", "VERIFYING", f"Querying live inventory ledger for {target_sku}...")
@@ -215,8 +220,8 @@ def _process_fragment(fragment_text: str, claimant: str, conn, t_start: float):
 
             log_trace("METRIC_CALCULATION", "VERIFYING", f"Stock metric: {current_stock}/{max_stock} ({ratio:.1f}%). Reorder threshold = {threshold:.1f}%.")
 
-            if ratio < threshold or current_stock < 50:
-                # Verified! Under 10% threshold
+            if ratio < threshold:
+                # Verified: genuinely below the critical threshold
                 log_trace("GATEKEEPER_EVAL", "VERIFIED", f"CRITICAL SHORTAGE VERIFIED: Stock ratio ({ratio:.1f}%) < threshold ({threshold:.1f}%).")
                 log_trace("PIPELINE_PREPARE", "PREPARED", f"Drafted restocking Purchase Order: 10 {inv['unit']} of {inv['name']}.")
                 log_trace("AUTO_EXECUTION", "EXECUTED", f"Automated PO dispatched to vendor via B2B API. Scheduled delivery: 05:30 AM.")
