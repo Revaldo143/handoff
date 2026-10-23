@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Optional, Dict, Any, List
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Body
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -48,7 +48,7 @@ class VoiceRequest(BaseModel):
     shift: Optional[str] = "Night Shift -> Morning Shift"
 
 class ActionRequest(BaseModel):
-    state: str = Field(..., example="APPROVED")
+    state: Optional[str] = None
     note: Optional[str] = None
 
 @app.get("/")
@@ -368,20 +368,20 @@ def list_pending_handoff():
     }
 
 @app.post("/api/claims/{claim_id}/approve")
-def approve_claim(claim_id: int, req: Optional[ActionRequest] = None):
-    note = req.note if req else "Manually approved by Morning Shift Store Manager"
+def approve_claim(claim_id: int, req: Optional[ActionRequest] = Body(None)):
+    note = req.note if req and req.note else "Manually approved by Morning Shift Store Manager"
     update_claim_status(claim_id, "APPROVED", note)
     return {"status": "success", "claim_id": claim_id, "state": "APPROVED"}
 
 @app.post("/api/claims/{claim_id}/refuse")
-def refuse_claim(claim_id: int, req: Optional[ActionRequest] = None):
-    note = req.note if req else "Refusal affirmed by Morning Shift Store Manager"
+def refuse_claim(claim_id: int, req: Optional[ActionRequest] = Body(None)):
+    note = req.note if req and req.note else "Refusal affirmed by Morning Shift Store Manager"
     update_claim_status(claim_id, "REFUSED", note)
     return {"status": "success", "claim_id": claim_id, "state": "REFUSED"}
 
 @app.post("/api/claims/{claim_id}/execute")
-def execute_claim(claim_id: int, req: Optional[ActionRequest] = None):
-    note = req.note if req else "Execution triggered by Morning Shift Store Manager"
+def execute_claim(claim_id: int, req: Optional[ActionRequest] = Body(None)):
+    note = req.note if req and req.note else "Execution triggered by Morning Shift Store Manager"
     update_claim_status(claim_id, "EXECUTED", note)
     return {"status": "success", "claim_id": claim_id, "state": "EXECUTED"}
 
